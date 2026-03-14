@@ -1,80 +1,125 @@
-# AI Invoice Processor (OCR + LLM + Automation)
+# AI Invoice Processing System
 
-Sistema automático para procesamiento inteligente de facturas usando:
+Sistema automático de procesamiento inteligente de facturas utilizando **OCR + LLM + MySQL + Dashboard + Automatización por correo**.
 
-- OCR (Tesseract)
-- IA Generativa (LLM vía OpenRouter)
-- Python
-- MySQL
-- Dashboard en Streamlit
-- Automatización por correo electrónico
-- Detección de duplicados por hash y lógica contable
-- Validaciones contables automáticas
-- Alertas por Telegram
+Este proyecto demuestra cómo construir un pipeline de procesamiento de documentos empresariales con IA.
 
 ---
 
-# Arquitectura
+# Arquitectura del sistema
 
-1. Correos con facturas llegan al buzón Gmail
-2. Script descarga adjuntos automáticamente
-3. Archivos se guardan en carpeta `input`
-4. Procesador aplica:
-   - OCR para extraer texto
-   - IA para estructurar datos
-   - Validación contable
-   - Detección de duplicados
-5. Datos se guardan en MySQL
-6. Dashboard muestra resultados en tiempo real
-7. Notificaciones enviadas por Telegram
+Flujo del sistema:
+
+Email → Descarga IMAP → Carpeta input → OCR → LLM → Validación → MySQL → Dashboard / Telegram
 
 ---
 
-# Tecnologías
+# Tecnologías utilizadas
 
 - Python
 - Tesseract OCR
 - OpenRouter LLM API
 - MySQL
 - Streamlit
-- IMAP Email Automation
 - Telegram Bot API
+- IMAP Email Automation
 
 ---
 
-# IA utilizada
+# Tipos de IA implementados
 
-### Document AI
-Extracción automática de datos estructurados desde facturas.
+## Document AI
+Extracción automática de datos estructurados desde documentos empresariales.
 
-### OCR (Computer Vision)
-Uso de Tesseract para convertir imágenes/PDF en texto.
+## OCR (Computer Vision)
+Uso de Tesseract para convertir documentos escaneados e imágenes en texto.
 
-### LLM (Large Language Models)
-Uso de modelos GPT a través de OpenRouter para interpretar y estructurar la información.
-
-### Automatización inteligente
-Pipeline automático para procesamiento de documentos.
+## LLM (Large Language Models)
+Uso de modelos de lenguaje para interpretar el texto y convertirlo en JSON estructurado.
 
 ---
 
-# Ejecución
+# Funcionalidades principales
+
+- Procesamiento automático de PDF / JPG / JPEG / PNG
+- Descarga automática de facturas desde correo
+- Extracción automática de:
+
+numero_factura  
+fecha_emision  
+proveedor  
+ruc_proveedor  
+subtotal  
+igv  
+total  
+forma_pago  
+
+- Validación contable automática
+- Detección de duplicados
+- Registro en MySQL
+- Dashboard en tiempo real
+- Notificaciones por Telegram
+
+---
+
+# Estructura del proyecto
+
+
+facturas-ai-processor
+│
+├── docs
+│
+├── facturas de ejemplo
+│
+├── .env.example
+├── .gitignore
+├── README.md
+├── requirements.txt
+│
+├── dashboard_facturas_tiempo_real.py
+├── descargar_adjuntos_email_automatico.py
+└── procesador_facturas_automatico_validacion_contable.py
+
+
+---
+
+# Cómo ejecutar
 
 Instalar dependencias
 
+
 pip install -r requirements.txt
 
-Ejecutar procesador automático
+
+Ejecutar procesador
+
 
 python procesador_facturas_automatico_validacion_contable.py
 
+
 Ejecutar dashboard
 
+
 streamlit run dashboard_facturas_tiempo_real.py
+
+
+---
+
+# Seguridad
+
+No subir a GitHub:
+
+.env  
+logs/  
+input/  
+procesadas/  
+error/  
+duplicados/  
+observadas/
 
 ---
 
 # Autor
 
-Carlos Vilcatoma  
+Carlos Eugenio Vilcatoma Ocaña  
 Consultor TI — Transformación Digital & IA
