@@ -1,0 +1,8 @@
+pytesseract
+pillow
+pymupdf
+pdf2image
+mysql-connector-python
+python-dotenv
+requests
+streamlit

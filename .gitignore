@@ -1,0 +1,30 @@
+# ENV
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual env
+venv/
+.venv/
+
+# Logs
+logs/
+
+# Carpetas de procesamiento
+input/
+procesadas/
+error/
+duplicados/
+observadas/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
