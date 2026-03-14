@@ -3,7 +3,14 @@
 Sistema automático de procesamiento inteligente de facturas utilizando **OCR + LLM + MySQL + Dashboard + Automatización por correo**.
 
 Este proyecto demuestra cómo construir un pipeline de procesamiento de documentos empresariales con IA.
-
+---
+![Python](https://img.shields.io/badge/Python-3.10-blue)
+![OCR](https://img.shields.io/badge/OCR-Tesseract-green)
+![LLM](https://img.shields.io/badge/LLM-OpenRouter-purple)
+![Database](https://img.shields.io/badge/Database-MySQL-orange)
+![Dashboard](https://img.shields.io/badge/Dashboard-Streamlit-red)
+![Automation](https://img.shields.io/badge/Automation-Email%20Pipeline-yellow)
+![License](https://img.shields.io/badge/License-MIT-lightgrey)
 ---
 
 # Arquitectura del sistema
@@ -12,6 +19,18 @@ Flujo del sistema:
 
 Email → Descarga IMAP → Carpeta input → OCR → LLM → Validación → MySQL → Dashboard / Telegram
 
+---
+### Flujo del sistema
+
+1. Recepción de facturas por correo electrónico
+2. Descarga automática de adjuntos mediante IMAP
+3. Almacenamiento en carpeta `input`
+4. OCR con Tesseract para extraer texto
+5. Procesamiento con LLM para estructurar datos
+6. Validaciones contables y detección de duplicados
+7. Almacenamiento en MySQL
+8. Visualización en dashboard Streamlit
+9. Alertas automáticas por Telegram
 ---
 
 # Tecnologías utilizadas
