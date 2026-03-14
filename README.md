@@ -118,6 +118,14 @@ duplicados/
 observadas/
 
 ---
+## Arquitectura del sistema
+
+![Arquitectura](docs/arquitectura_facturas_ai.png)
+
+## Dashboard
+
+![Dashboard](docs/dashboard_facturas.png)
+---
 
 # Autor
 
