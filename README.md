@@ -20,6 +20,11 @@ Flujo del sistema:
 Email → Descarga IMAP → Carpeta input → OCR → LLM → Validación → MySQL → Dashboard / Telegram
 
 ---
+## Flujo del sistema
+
+![Flujo](docs/flujo_sistema_facturas.png)
+---
+
 ### Flujo del sistema
 
 1. Recepción de facturas por correo electrónico
