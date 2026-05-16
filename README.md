@@ -1,4 +1,4 @@
-# 🧾 AI Invoice Processing System
+# 🧾 Sistema de procesamiento de facturas con IA
 
 Sistema automático de procesamiento inteligente de facturas utilizando **OCR + LLM + MySQL + Dashboard + Automatización por correo**.
 
