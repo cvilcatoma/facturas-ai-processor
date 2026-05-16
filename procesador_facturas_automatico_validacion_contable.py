@@ -297,8 +297,144 @@ def extraer_texto_imagen(ruta_imagen):
 
     texto = ocr_con_fallback(img)
     if not texto:
-        raise RuntimeError("OCR no devolvió texto para la imagen.")
+        log("OCR no devolvió texto para la imagen. Se escalará a IA directamente.")
+        return ""   # vacío → ocr_extrajo_datos_suficientes() → False → IA
     return texto
+
+
+def ocr_extrajo_datos_suficientes(texto):
+    """
+    Evalúa si el texto extraído por OCR contiene los campos clave
+    de una factura peruana. Retorna True si el OCR fue suficiente
+    y no es necesario llamar a la IA.
+    """
+    if not texto or len(texto.strip()) < 30:
+        log("OCR: texto insuficiente (muy corto). Se usará IA.")
+        return False
+
+    texto_lower = texto.lower()
+
+    # Detectar número de factura (formato peruano: F001-000123, E001-1, etc.)
+    import re
+    tiene_numero_factura = bool(re.search(r'[fFbBeE]\d{3}[-\s]\d+', texto))
+
+    # Detectar RUC (11 dígitos, a veces precedido por "RUC")
+    tiene_ruc = bool(re.search(r'\b\d{11}\b', texto))
+
+    # Detectar monto total (S/ o número con decimales)
+    tiene_monto = bool(re.search(r'(s/\.?\s*\d+[\.,]\d{2}|\b\d{1,8}[\.,]\d{2}\b)', texto_lower))
+
+    campos_encontrados = sum([tiene_numero_factura, tiene_ruc, tiene_monto])
+
+    log(
+        f"OCR evaluación -> Nº factura: {tiene_numero_factura} | "
+        f"RUC: {tiene_ruc} | Monto: {tiene_monto} | "
+        f"Campos encontrados: {campos_encontrados}/3"
+    )
+
+    if campos_encontrados >= 2:
+        log("OCR suficiente. Se intentará extraer datos sin IA.")
+        return True
+
+    log("OCR insuficiente. Se escalará a IA.")
+    return False
+
+
+def extraer_datos_con_ocr(texto):
+    """
+    Intenta estructurar los datos de la factura usando solo expresiones
+    regulares sobre el texto extraído por OCR, sin llamar a la IA.
+    Retorna un dict con los campos o None si no pudo estructurarlos.
+    """
+    import re
+
+    datos = {
+        "numero_factura": "",
+        "fecha_emision": "",
+        "fecha_vencimiento": "",
+        "proveedor": "",
+        "ruc_proveedor": "",
+        "cliente": "",
+        "subtotal": "",
+        "igv": "",
+        "total": "",
+        "forma_pago": "",
+    }
+
+    # Número de factura
+    m = re.search(r'([fFbBeE]\d{3}[-\s]\d+)', texto)
+    if m:
+        datos["numero_factura"] = m.group(1).strip()
+
+    # RUC (11 dígitos)
+    ruc_matches = re.findall(r'\b(\d{11})\b', texto)
+    if ruc_matches:
+        datos["ruc_proveedor"] = ruc_matches[0]
+
+    # Fecha emisión
+    m = re.search(
+        r'(?:fecha\s*(?:de\s*)?emisi[oó]n|emitido|fecha)[:\s]+(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4})',
+        texto, re.IGNORECASE
+    )
+    if m:
+        datos["fecha_emision"] = m.group(1).strip()
+    else:
+        # Buscar cualquier fecha dd/mm/yyyy
+        m = re.search(r'\b(\d{1,2}[/\-]\d{1,2}[/\-]\d{4})\b', texto)
+        if m:
+            datos["fecha_emision"] = m.group(1).strip()
+
+    # Total
+    m = re.search(
+        r'(?:total\s*(?:a\s*pagar)?|importe\s*total)[:\s]*(s/\.?\s*)?(\d{1,8}[.,]\d{2})',
+        texto, re.IGNORECASE
+    )
+    if m:
+        datos["total"] = m.group(2).replace(",", ".")
+
+    # IGV
+    m = re.search(
+        r'(?:igv|i\.g\.v)[:\s]*(s/\.?\s*)?(\d{1,8}[.,]\d{2})',
+        texto, re.IGNORECASE
+    )
+    if m:
+        datos["igv"] = m.group(2).replace(",", ".")
+
+    # Subtotal
+    m = re.search(
+        r'(?:subtotal|sub\s*total|valor\s*venta)[:\s]*(s/\.?\s*)?(\d{1,8}[.,]\d{2})',
+        texto, re.IGNORECASE
+    )
+    if m:
+        datos["subtotal"] = m.group(2).replace(",", ".")
+
+    # Forma de pago
+    m = re.search(
+        r'(?:forma\s*de\s*pago|condici[oó]n\s*de\s*pago)[:\s]+([^\n]+)',
+        texto, re.IGNORECASE
+    )
+    if m:
+        datos["forma_pago"] = m.group(1).strip()[:100]
+
+    # Validar campos críticos de identificación
+    campos_criticos = [datos["numero_factura"], datos["ruc_proveedor"]]
+    if not all(campos_criticos):
+        log("OCR: faltan número de factura o RUC. Escalando a IA...")
+        return None
+
+    # Validar campos financieros obligatorios
+    # Si falta cualquiera de los montos → escalar a IA para datos completos
+    campos_financieros = [datos["subtotal"], datos["igv"], datos["total"]]
+    if not all(campos_financieros):
+        log(
+            f"OCR: campos financieros incompletos "
+            f"(subtotal='{datos['subtotal']}' | igv='{datos['igv']}' | total='{datos['total']}'). "
+            f"Escalando a IA para garantizar datos completos..."
+        )
+        return None
+
+    log("Datos estructurados por OCR OK (sin IA).")
+    return datos
 
 
 def extraer_json_de_texto(texto):
@@ -310,11 +446,13 @@ def extraer_json_de_texto(texto):
     return json.loads(texto)
 
 
-def extraer_datos_con_ia(texto_factura):
+def extraer_datos_con_ia(texto_factura, ruta_archivo=None):
+    import base64
+
     log("Enviando factura a IA...")
 
-    prompt = f"""Extrae estos datos de la factura y responde SOLO con JSON valido, sin texto extra ni backticks:
-{{
+    prompt_base = """Extrae estos datos de la factura y responde SOLO con JSON valido, sin texto extra ni backticks:
+{
   "numero_factura":"",
   "fecha_emision":"",
   "fecha_vencimiento":"",
@@ -325,16 +463,41 @@ def extraer_datos_con_ia(texto_factura):
   "igv":"",
   "total":"",
   "forma_pago":""
-}}
+}
 
 Reglas:
 - Devuelve exactamente un objeto JSON.
 - Mantén los valores como texto.
 - Si no encuentras un dato, deja una cadena vacia.
 - No agregues explicaciones.
+- subtotal, igv y total deben ser SOLO el valor numerico (ejemplo: 1234.56). NUNCA el texto en letras como "mil doscientos".
+- Si ves "Son: DOCE MIL..." u otra expresion en letras, ignorala. Usa solo el numero que aparece junto a S/, IGV o TOTAL.
+- Para fecha_emision busca el formato dd/mm/yyyy o similar cerca de palabras como Fecha, Emision, Emitido."""
 
-FACTURA:
-{texto_factura}"""
+    # Si no hay texto (OCR falló totalmente) → enviar imagen directamente al modelo de visión
+    texto_vacio = not texto_factura or not texto_factura.strip()
+    if texto_vacio and ruta_archivo:
+        ext = os.path.splitext(ruta_archivo)[1].lower()
+        mime = "image/jpeg" if ext in {".jpg", ".jpeg"} else "image/png"
+        log("Texto OCR vacío — enviando imagen directamente a la IA (modo visión)...")
+        with open(ruta_archivo, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+        messages_payload = [
+            {"role": "system", "content": "Eres un extractor de datos de facturas. Devuelve unicamente JSON valido."},
+            {"role": "user", "content": [
+                {"type": "text",  "text": prompt_base},
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+            ]},
+        ]
+        modelo = "openai/gpt-4o-mini"
+    else:
+        prompt = f"{prompt_base}\n\nFACTURA:\n{texto_factura}"
+        messages_payload = [
+            {"role": "system", "content": "Eres un extractor de datos de facturas. Devuelve unicamente JSON valido."},
+            {"role": "user",   "content": prompt},
+        ]
+        modelo = "openai/gpt-4o-mini"
 
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
@@ -345,11 +508,8 @@ FACTURA:
             "X-Title": "Procesador Automatico Facturas",
         },
         json={
-            "model": "openai/gpt-4o-mini",
-            "messages": [
-                {"role": "system", "content": "Eres un extractor de datos de facturas. Devuelve unicamente JSON valido."},
-                {"role": "user", "content": prompt},
-            ],
+            "model": modelo,
+            "messages": messages_payload,
             "temperature": 0,
         },
         timeout=60,
@@ -615,7 +775,18 @@ def procesar_archivo(ruta_archivo):
         return "duplicado"
 
     texto = obtener_texto_archivo(ruta_archivo)
-    datos = extraer_datos_con_ia(texto)
+
+    # ── FLUJO CASCADA: OCR primero, IA solo si OCR no es suficiente ──────────
+    datos = None
+    if ocr_extrajo_datos_suficientes(texto):
+        datos = extraer_datos_con_ocr(texto)
+        if datos is None:
+            log("OCR no pudo estructurar los campos clave. Escalando a IA...")
+
+    if datos is None:
+        log("Llamando a IA para extraer datos...")
+        datos = extraer_datos_con_ia(texto, ruta_archivo)
+    # ─────────────────────────────────────────────────────────────────────────
 
     numero_factura = str(datos.get("numero_factura", "")).strip()
     ruc_proveedor = str(datos.get("ruc_proveedor", "")).strip()
