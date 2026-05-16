@@ -27,6 +27,7 @@ Este proyecto implementa un pipeline completo de procesamiento de documentos emp
 - [Creación de carpetas del sistema](#creación-de-carpetas-del-sistema)
 - [Cómo ejecutar](#cómo-ejecutar)
 - [Lógica de procesamiento OCR → IA](#lógica-de-procesamiento-ocr--ia)
+- [Base de datos](#base-de-datos)
 - [Estados de las facturas](#estados-de-las-facturas)
 - [Funcionalidades principales](#funcionalidades-principales)
 - [Seguridad](#seguridad)
@@ -350,6 +351,99 @@ Si el texto OCR está completamente vacío, en lugar de enviar texto vacío a la
 ```
 
 ---
+
+## Base de datos
+
+El sistema crea y gestiona automáticamente la base de datos y la tabla al arrancar. No es necesario ejecutar ningún script SQL manualmente.
+
+### Creación automática
+
+Al ejecutar el procesador por primera vez se crea:
+- La base de datos `demo_facturas` (nombre configurable en `.env`)
+- La tabla `facturas` con todos sus campos
+- Los índices necesarios para búsqueda rápida de duplicados
+
+### Estructura de la tabla `facturas`
+
+```sql
+CREATE TABLE facturas (
+    id                INT AUTO_INCREMENT PRIMARY KEY,
+    archivo_origen    VARCHAR(255),   -- nombre del archivo procesado
+    hash_archivo      VARCHAR(64),    -- SHA-256 del archivo (detección duplicados exactos)
+    numero_factura    VARCHAR(50),    -- ej: F001-00000847
+    fecha_emision     VARCHAR(20),    -- ej: 15/05/2026
+    fecha_vencimiento VARCHAR(20),    -- ej: 14/06/2026
+    proveedor         VARCHAR(200),   -- razón social del emisor
+    ruc_proveedor     VARCHAR(20),    -- RUC del emisor (11 dígitos)
+    cliente           VARCHAR(200),   -- razón social del receptor
+    subtotal          VARCHAR(30),    -- monto sin IGV
+    igv               VARCHAR(30),    -- IGV (18%)
+    total             VARCHAR(30),    -- monto total
+    forma_pago        VARCHAR(100),   -- contado / crédito 30 días / etc.
+    json_ia           LONGTEXT,       -- JSON completo devuelto por la IA (auditoría)
+    estado            VARCHAR(30),    -- PROCESADA / OBSERVADA_CONTABLE / DUPLICADO / ERROR
+    observacion       VARCHAR(255),   -- detalle del problema si no pasó validación
+    fecha_registro    DATETIME        -- timestamp automático del procesamiento
+);
+```
+
+### Índices creados automáticamente
+
+```sql
+-- Para búsqueda rápida de duplicados exactos por hash
+CREATE INDEX idx_facturas_hash_archivo ON facturas(hash_archivo);
+
+-- Para búsqueda de duplicados lógicos por número de factura + RUC
+CREATE INDEX idx_facturas_ruc_numero ON facturas(ruc_proveedor, numero_factura);
+```
+
+### Campos clave explicados
+
+| Campo | Para qué sirve |
+|---|---|
+| `hash_archivo` | Detecta si el mismo archivo fue subido dos veces aunque tenga distinto nombre |
+| `json_ia` | Guarda el JSON completo que devolvió la IA — sirve para auditoría y reprocesamiento |
+| `estado` | Permite filtrar en el dashboard: solo PROCESADAS, solo OBSERVADAS, etc. |
+| `observacion` | Explica por qué una factura quedó en OBSERVADA o ERROR |
+
+### Ejemplo de registro grabado en MySQL
+
+```
+id               : 1
+archivo_origen   : factura_enero_2026.pdf
+hash_archivo     : a67f591ec2afdf88fe1f9a4236f0372d...
+numero_factura   : F001-00000847
+fecha_emision    : 15/05/2026
+fecha_vencimiento: 14/06/2026
+proveedor        : DISTRIBUIDORA COMERCIAL SAN MARTIN E.I.R.L.
+ruc_proveedor    : 20512345678
+cliente          : INVERSIONES TECNOLOGICAS DEL PERU S.A.C.
+subtotal         : 10220.34
+igv              : 1839.66
+total            : 12060.00
+forma_pago       : Credito 30 dias
+estado           : PROCESADA
+observacion      : (vacío)
+fecha_registro   : 2026-05-16 16:36:55
+```
+
+### Conexión a MySQL en Windows
+
+Si MySQL Workbench no conecta con `localhost`, usa `127.0.0.1` en el Hostname. Aplica lo mismo en el `.env`:
+
+```env
+MYSQL_HOST=127.0.0.1   # ← siempre usar esto en lugar de localhost en Windows
+```
+
+Iniciar el servicio si está detenido:
+```cmd
+net start MySQL80
+```
+
+Verificar que MySQL escucha en el puerto 3306:
+```cmd
+netstat -an | findstr 3306
+```
 
 ## Estados de las facturas
 
